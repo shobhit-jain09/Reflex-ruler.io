@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Reflex Pro: Scale Catch</title>
+    <style>
+        :root {
+            --ruler-gold: #e5b323;
+            --ruler-dark: #c4911a;
+            --bg-color: #1a1a1a;
+            --accent: #00d4ff;
+        }
+
+        body {
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            background-color: var(--bg-color);
+            color: white;
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            overflow: hidden;
+            touch-action: none;
+        }
+
+        #game-container {
+            position: relative;
+            width: 90%;
+            max-width: 400px;
+            height: 75vh;
+            background: #222;
+            border-radius: 20px;
+            border: 2px solid #333;
+            overflow: hidden;
+            box-shadow: inset 0 0 50px rgba(0,0,0,0.5);
+        }
+
+        /* The Ruler Design */
+        #scale {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 55px;
+            height: 1200px;
+            background: linear-gradient(to right, var(--ruler-gold), var(--ruler-dark), var(--ruler-gold));
+            border: 1px solid #916c12;
+            top: -1100px;
+            box-shadow: 5px 0 15px rgba(0,0,0,0.3);
+            border-radius: 2px;
+        }
+
+        /* Catch Zone Overlay */
+        .catch-zone {
+            position: absolute;
+            top: 70%;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: var(--accent);
+            box-shadow: 0 0 15px var(--accent);
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        .catch-label {
+            position: absolute;
+            top: 71%;
+            right: 10px;
+            color: var(--accent);
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .mark {
+            position: absolute;
+            width: 40%;
+            height: 1px;
+            background: rgba(0,0,0,0.6);
+            right: 0;
+        }
+
+        .mark.medium { width: 60%; height: 2px; background: rgba(0,0,0,0.8); }
+        
+        .mark.major {
+            width: 85%;
+            height: 2px;
+            background: #000;
+        }
+
+        .mark-label {
+            position: absolute;
+            left: -25px;
+            font-size: 12px;
+            font-weight: 900;
+            color: #333;
+            top: -7px;
+            font-family: serif;
+        }
+
+        /* UI Styling */
+        #ui {
+            padding: 20px;
+            text-align: center;
+            width: 100%;
+        }
+
+        #status {
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: #888;
+            margin-bottom: 5px;
+        }
+
+        #result {
+            font-size: 32px;
+            font-weight: bold;
+            text-shadow: 0 0 10px rgba(0,212,255,0.3);
+        }
+
+        .hint {
+            font-size: 12px;
+            color: #555;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body onclick="handleClick()">
+
+    <div id="status">Ready?</div>
+    <div id="result">TAP TO START</div>
+
+    <div id="game-container">
+        <div class="catch-zone"></div>
+        <div class="catch-label">Catch Line</div>
+        <div id="scale"></div>
+    </div>
+
+    <div class="hint">Reaction time test: Catch as low as possible.</div>
+
+    <script>
+        const scale = document.getElementById('scale');
+        const statusText = document.getElementById('status');
+        const resultText = document.getElementById('result');
+        
+        let gameState = 'IDLE'; 
+        let startTime, dropTimeout;
+        let position = -1100;
+        let velocity = 0;
+        const gravity = 0.9; 
+
+        // Generate Detailed Ruler Markings
+        for (let i = 0; i <= 60; i++) {
+            const mark = document.createElement('div');
+            mark.className = 'mark';
+            mark.style.top = (i * 20) + 'px'; 
+            
+            if (i % 10 === 0) {
+                mark.classList.add('major');
+                mark.innerHTML = `<span class="mark-label">${i}</span>`;
+            } else if (i % 5 === 0) {
+                mark.classList.add('medium');
+            }
+            scale.appendChild(mark);
+        }
+
+        function handleClick() {
+            if (gameState === 'IDLE' || gameState === 'FINISHED') {
+                resetGame();
+            } else if (gameState === 'WAITING') {
+                earlyExit();
+            } else if (gameState === 'DROPPING') {
+                stopScale();
+            }
+        }
+
+        function resetGame() {
+            gameState = 'WAITING';
+            position = -1100;
+            velocity = 0;
+            scale.style.top = position + 'px';
+            statusText.innerText = "Wait for it...";
+            resultText.innerText = "HOLD...";
+            resultText.style.color = "white";
+            
+            const delay = Math.random() * 3000 + 1500; 
+            dropTimeout = setTimeout(startDrop, delay);
+        }
+
+        function earlyExit() {
+            clearTimeout(dropTimeout);
+            gameState = 'FINISHED';
+            statusText.innerText = "Focus!";
+            resultText.innerText = "TOO EARLY";
+            resultText.style.color = "#ff4757";
+        }
+
+        function startDrop() {
+            gameState = 'DROPPING';
+            statusText.innerText = "GO GO GO!";
+            startTime = performance.now();
+            requestAnimationFrame(updatePhysics);
+        }
+
+        function updatePhysics() {
+            if (gameState !== 'DROPPING') return;
+            
+            velocity += gravity;
+            position += velocity;
+            scale.style.top = position + 'px';
+
+            if (position > window.innerHeight) { 
+                gameState = 'FINISHED';
+                statusText.innerText = "Missed!";
+                resultText.innerText = "OUT OF BOUNDS";
+                resultText.style.color = "#ff4757";
+            } else {
+                requestAnimationFrame(updatePhysics);
+            }
+        }
+
+        function stopScale() {
+            gameState = 'FINISHED';
+            const reactionTimeMs = performance.now() - startTime;
+            
+            // Physics: d = 0.5 * g * t^2
+            const seconds = reactionTimeMs / 1000;
+            const cm = 0.5 * 980 * Math.pow(seconds, 2);
+            
+            statusText.innerText = `Reaction: ${Math.round(reactionTimeMs)}ms`;
+            resultText.innerText = `${cm.toFixed(1)} cm`;
+            
+            // Color feedback based on performance
+            if (cm < 10) resultText.style.color = "#00d4ff"; // Elite
+            else if (cm < 20) resultText.style.color = "#2ecc71"; // Good
+            else resultText.style.color = "#f1c40f"; // Average
+        }
+    </script>
+</body>
+</html>
